@@ -1,6 +1,7 @@
 package files
 
 import (
+	"baptistedeporte/partage/internal/storage"
 	"context"
 	"crypto/rand"
 	"io"
@@ -8,6 +9,7 @@ import (
 
 type Storage interface {
 	Put(ctx context.Context, id string, r io.Reader) error
+	Get(ctx context.Context, id string) (io.ReadSeekCloser, *storage.FileMetadata, error)
 }
 
 type Service struct {
@@ -26,4 +28,13 @@ func (s *Service) Upload(ctx context.Context, r io.Reader) (string, error) {
 		return "", err
 	}
 	return id, nil
+}
+
+func (s *Service) Download(ctx context.Context, id string) (io.ReadSeekCloser, *storage.FileMetadata, error) {
+	rs, fi, err := s.storage.Get(ctx, id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	return rs, fi, nil
 }

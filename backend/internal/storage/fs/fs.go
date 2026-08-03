@@ -1,6 +1,7 @@
 package fs
 
 import (
+	"baptistedeporte/partage/internal/storage"
 	"context"
 	"errors"
 	"io"
@@ -9,11 +10,7 @@ import (
 	"strings"
 )
 
-var (
-	ErrAlreadyExists = errors.New("file already exists")
-	ErrNotADirectory = errors.New("not a directory")
-	ErrInvalidID     = errors.New("invalid file id")
-)
+var ErrNotADirectory = errors.New("not a directory")
 
 type FS struct {
 	rootDir string
@@ -36,20 +33,57 @@ func New(dir string) (*FS, error) {
 	return fs, nil
 }
 
-func (f *FS) Put(ctx context.Context, id string, r io.Reader) (err error) {
+func (f *FS) getPath(id string) (string, error) {
 	if strings.ContainsAny(id, `/\`) || id == "" || id == "." || id == ".." {
-		return ErrInvalidID
+		return "", storage.ErrInvalidID
 	}
 
 	p := filepath.Join(f.rootDir, id)
 	rel, err := filepath.Rel(f.rootDir, p)
 
 	if err != nil || strings.HasPrefix(rel, "..") {
-		return ErrInvalidID
+		return "", storage.ErrInvalidID
+	}
+
+	return p, nil
+}
+
+func (f *FS) Get(ctx context.Context, id string) (io.ReadSeekCloser, *storage.FileMetadata, error) {
+	p, err := f.getPath(id)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	file, err := os.Open(p)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil, storage.ErrNotFound
+		}
+		return nil, nil, err
+	}
+
+	fileInfo, err := file.Stat()
+	if err != nil {
+		file.Close()
+		return nil, nil, err
+	}
+
+	fmeta := &storage.FileMetadata{
+		Name:    fileInfo.Name(),
+		LastMod: fileInfo.ModTime(),
+	}
+
+	return file, fmeta, err
+}
+
+func (f *FS) Put(ctx context.Context, id string, r io.Reader) (err error) {
+	p, err := f.getPath(id)
+	if err != nil {
+		return err
 	}
 
 	if _, err := os.Stat(p); err == nil {
-		return ErrAlreadyExists
+		return storage.ErrAlreadyExists
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return err
 	}
