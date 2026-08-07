@@ -48,32 +48,35 @@ func (f *FS) getPath(id string) (string, error) {
 	return p, nil
 }
 
-func (f *FS) Get(ctx context.Context, id string) (io.ReadSeekCloser, *storage.FileMetadata, error) {
+func (f *FS) Get(ctx context.Context, id string) (io.ReadSeekCloser, storage.FileMetadata, error) {
 	p, err := f.getPath(id)
 	if err != nil {
-		return nil, nil, err
+		return nil, storage.FileMetadata{}, err
 	}
 
 	file, err := os.Open(p)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil, storage.ErrNotFound
+			return nil, storage.FileMetadata{}, storage.ErrNotFound
 		}
-		return nil, nil, err
+		return nil, storage.FileMetadata{}, err
 	}
 
 	fileInfo, err := file.Stat()
 	if err != nil {
 		file.Close()
-		return nil, nil, err
+		return nil, storage.FileMetadata{}, err
 	}
 
-	fmeta := &storage.FileMetadata{
+	fmeta := storage.FileMetadata{
 		Name:    fileInfo.Name(),
 		LastMod: fileInfo.ModTime(),
 	}
 
-	return file, fmeta, err
+	fmeta.Name = fileInfo.Name()
+	fmeta.LastMod = fileInfo.ModTime()
+
+	return file, fmeta, nil
 }
 
 func (f *FS) Put(ctx context.Context, id string, r io.Reader) (err error) {
